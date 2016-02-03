@@ -1,0 +1,77 @@
+[root@da-gbk-a001 bin]# cat /usr/bin/markmod
+#!/bin/bash
+# $1 -- unit number
+# $2 -- author
+# $3 -- file
+
+umask 0000
+
+BASEDIR=/home/mark/unit
+(
+    mkdir -p $BASEDIR
+) 2> /dev/null
+
+NOBACK=
+
+UNITNO=$1
+USER=$2
+
+if [ "$USER" == "-B" ] ; then
+        NOBACK=1
+elif echo -n "$USER" | egrep -qv '[a-zA-Z]{2,10}' ; then
+    echo "Invalid User Name $USER , 2-10 letters only" >&2
+    exit 1
+fi
+if echo -n "$UNITNO" | egrep -qve '^(-|[1-9][0-9]{2,5})$' ; then
+    echo "Invalid Unit Number $UNITNO" >&2
+    exit 1
+fi
+
+if [ "$UNITNO" == "-" ] ; then
+    UNITNO="not_unit"$( date '+%Y%m%d%H' )
+fi
+
+[[ -d $BASEDIR/$UNITNO ]] || mkdir -p -m 777 $BASEDIR/$UNITNO
+
+shift
+
+(
+    flock -x 200
+
+        BAKBUF=`mktemp`
+        trap "rm -f $BAKBUF" EXIT
+
+        MARKCOUNT=0
+
+    while shift ; do
+        FILE="$( readlink -f "$1" )"
+
+        if [ -z "$FILE" ] ; then
+            continue;
+        fi
+
+        if [ ! -f "$FILE" ] || [ ! -r "$FILE" ] ; then
+            echo "WARNING: Not exists or not readable, skipped: $FILE"
+            continue;
+        fi
+
+                [ -f $BASEDIR/$UNITNO/DONE ] && touch $BASEDIR/$UNITNO/DONE
+        echo "$FILE" >> $BASEDIR/$UNITNO/update_list
+        echo "MARKED: $FILE"
+                (( MARKCOUNT++ ))
+                if [ -z "$NOBACK" ] ; then
+                /usr/bin/back "$USER" "$FILE" 2>$BAKBUF
+                        BAKLINE="$( fgrep 'BAKFILE: ' $BAKBUF )"
+                        BAKFILE=$( echo -n "$BAKLINE" | sed -r 's/BAKFILE: //g' )
+                        echo "$FILE $BAKFILE" >> $BASEDIR/$UNITNO/bakfile_list
+                        cat $BAKBUF
+                fi
+    done
+    chmod 666 $BASEDIR/$UNITNO/update_list 2> /dev/null
+    chmod 666 $BASEDIR/$UNITNO/bakfile_list 2> /dev/null
+
+        if [ $MARKCOUNT -eq 0 ] ; then
+                echo "WARNING: No file marked." >&2
+        fi
+
+) 200> $BASEDIR/.modlock
