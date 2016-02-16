@@ -1,0 +1,52 @@
+#!/bin/bash
+
+USER=$1
+
+help () {
+    echo "Usage: /usr/bin/back <name> <file>"
+    echo "Multiple files are currently banned."
+}
+
+if echo -n "$USER" | egrep -q '[^/\\.*?]{2-10}' ; then
+     echo "Invalid User Name: $USER" >&2
+     exit 1
+fi
+
+if [ -z "$2" ] ; then
+     echo "ERROR: No file specified" >&2
+     help
+     exit 4
+fi
+
+LPCNT=0
+while shift ; do
+    FILE="$1"
+    if [ -z "$FILE" ] ; then
+        continue;
+    fi
+    if [[ $LPCNT -gt 0 ]] ; then
+        echo "ERROR: Multiple files are not supported." >&2     # Requested by Mu
+        exit 2
+    fi
+    if [ ! -f "$FILE" ] ; then
+        echo "ERROR: Not regular file: $FILE" >&2
+        continue
+    fi
+    FF="$( readlink -f "$FILE" )"
+    if [ $? -ne 0 ] ; then
+        echo "FAIL ON: $FILE"
+        continue
+    fi
+    DIR="$( dirname "$FF" )"
+    BN="$( basename "$FF" )"
+    [[ -d $DIR/BACK ]] || ( mkdir $DIR/BACK ; chmod g+w $DIR/BACK )
+    BAKFILE="$DIR/BACK/$BN.$USER.$( date '+%Y%m%d%H%M%S' )"
+    MSG=$( cp -pf $FF $BAKFILE 2>&1 )
+    if [ $? -eq 0 ] ; then
+        echo "BAKFILE: $BAKFILE" >&2
+    else
+        echo "ERROR ON: $BAKFILE" >&2
+        echo $MSG >&2
+    fi
+    (( LPCNT++ ))
+done
