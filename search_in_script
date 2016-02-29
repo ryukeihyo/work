@@ -1,0 +1,41 @@
+/usr/home/svi/bin/search_in_script
+#!/bin/sh
+GREPPRE=-n
+GREPPOST=
+PATTERN="$1"
+GREP=grep
+
+OPTIND=0
+while [ $# -ge $OPTIND ] ; do
+    PARAM="${!OPTIND}"
+    if [ "${PARAM:0:1}" == "-" ] ; then
+        case "${PARAM:1}" in
+        gpre)
+            ((OPTIND++))
+            GREPPRE="${!OPTIND}"
+            ;;
+        gpost)
+            ((OPTIND++))
+            GREPPOST="${!OPTIND}"
+            ;;
+        ngrep)
+            GREP=ngrep
+            ;;
+        *)
+            echo 'Unrecognized argument: ' $PARAM
+            exit 2
+        esac
+    else
+        PATTERN="$PARAM"
+    fi
+    ((OPTIND++))
+done
+
+find . -type f \
+         -not \( -path '*old*' -o -path '*BACK*' -o -path '*TEMP*' -o -path '*/BAK/*' -o -path '*/templates_c/*' \
+                 -o -path '*backup*' -o -path '*DIFF*' -o -path '*_bk*' -o -path '*/honban/*' -o -path '*.test.*' \
+                 -o -name '*_mu.*' -o -name '*_test.*' -o -path '*/skeleton/*' \) \
+         \( -name '*.html' -o -name '*.tpl' -o -name '*.php' -o -name '*.pl' -o -name '*.cgi' \
+            -o -name '*.c' -o -name '*.h' -o -name '*.sh' -o -name '*.inc' -o -name '*.js' -o -name '*.pm' \
+            -o -name '*.java' -o -name '*.css' -o -name '*.xml' -o -name '*.conf' -o -name '*.sql' \) \
+         -exec $GREP $GREPPRE "$PATTERN" $GREPPOST {} + 2> /dev/null
